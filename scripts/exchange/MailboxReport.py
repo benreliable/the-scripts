@@ -374,10 +374,14 @@ class MailboxReportApp:
         # Pass the script as a base64 UTF-16LE -EncodedCommand rather than a raw
         # -Command argument. This sidesteps argv quoting/length limits with the
         # large embedded script and bypasses script-file execution policy.
+        # -ExecutionPolicy Bypass is required: a restrictive machine policy
+        # (Restricted/AllSigned) makes PowerShell refuse to load a module's
+        # unsigned, internet-downloaded *.format.ps1xml files, which surfaces as
+        # "AuthorizationManager check failed" when importing ExchangeOnlineManagement.
         encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
         candidates = [
-            ["pwsh", "-NoProfile", "-EncodedCommand", encoded],
-            ["powershell", "-NoProfile", "-EncodedCommand", encoded],
+            ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
         ]
 
         last_error = None
