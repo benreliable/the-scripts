@@ -1,0 +1,4 @@
+# PyInstaller build output (from: python MailboxReport.py --build)
+build/
+dist/
+*.spec

@@ -109,6 +109,8 @@ The repository is organized into the following directories:
 
 *   [DeletedEmails.ps1](scripts/exchange/DeletedEmails.ps1)
 *   [HideUsersFromGAL.ps1](scripts/exchange/HideUsersFromGAL.ps1)
+*   [MailboxReport.py](scripts/exchange/MailboxReport.py)
+    *   **Description:** A Tkinter desktop app that connects to Exchange Online, lists user and shared mailboxes with their size, quotas and Full Access / Send As / Send on Behalf permissions, and exports the report to CSV. The required `ExchangeOnlineManagement` PowerShell module is installed automatically on first run. See [its README](scripts/exchange/MailboxReport.md) to run it or build a standalone `.exe`.
 
 ### Windows
 

@@ -1,15 +1,35 @@
+import argparse
+import base64
 import csv
 import json
+import os
 import queue
 import subprocess
+import sys
 import threading
-import tkinter as tk
 from datetime import datetime
-from tkinter import ttk, messagebox, filedialog
+
+# Tkinter ships with the standard python.org installer, but some minimal,
+# embedded or Microsoft Store Python builds omit it. Import defensively so we
+# can show a helpful message instead of an opaque traceback (see main()).
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox, filedialog
+except ImportError:
+    tk = None
+    ttk = messagebox = filedialog = None
 
 
 POWERSHELL_SCRIPT = r'''
 $ErrorActionPreference = "Stop"
+
+# Windows PowerShell 5.1 negotiates TLS 1.0 by default, which the PowerShell
+# Gallery rejects. Without this, Install-Module fails for any user who does not
+# already have ExchangeOnlineManagement installed. Harmless on PowerShell 7+.
+try {
+    [Net.ServicePointManager]::SecurityProtocol = `
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} catch {}
 
 function Send-Status {
     param([string]$Message)
@@ -351,9 +371,13 @@ class MailboxReportApp:
         return normalized
 
     def run_powershell_streaming(self, script: str):
+        # Pass the script as a base64 UTF-16LE -EncodedCommand rather than a raw
+        # -Command argument. This sidesteps argv quoting/length limits with the
+        # large embedded script and bypasses script-file execution policy.
+        encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
         candidates = [
-            ["pwsh", "-NoProfile", "-Command", script],
-            ["powershell", "-NoProfile", "-Command", script],
+            ["pwsh", "-NoProfile", "-EncodedCommand", encoded],
+            ["powershell", "-NoProfile", "-EncodedCommand", encoded],
         ]
 
         last_error = None
@@ -650,7 +674,55 @@ class MailboxReportApp:
         return rows
 
 
+def build_executable():
+    """Compile this script into a standalone Windows .exe using PyInstaller."""
+    try:
+        import PyInstaller.__main__
+    except ImportError:
+        print("PyInstaller is required to build the executable.")
+        print("Install it first:  pip install pyinstaller")
+        return 1
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    name = "MailboxReport"
+
+    pyinstaller_args = [
+        "--name=%s" % name,
+        "--onefile",
+        "--windowed",
+        "--distpath=%s" % os.path.join(script_dir, "dist"),
+        "--workpath=%s" % os.path.join(script_dir, "build"),
+        "--specpath=%s" % script_dir,
+        os.path.abspath(__file__),
+    ]
+
+    PyInstaller.__main__.run(pyinstaller_args)
+    print("\nBuild complete. Executable: %s" % os.path.join(script_dir, "dist", name + ".exe"))
+    return 0
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Exchange Online Mailbox Viewer")
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help="Build a standalone Windows executable with PyInstaller, then exit.",
+    )
+    args = parser.parse_args()
+
+    if args.build:
+        return build_executable()
+
+    if tk is None:
+        sys.stderr.write(
+            "This application needs Python's Tkinter GUI library, which is not installed.\n"
+            "Tkinter is included with the standard installer from https://python.org\n"
+            "(make sure the 'tcl/tk and IDLE' feature is selected). If you cannot install\n"
+            "it here, build a standalone .exe on a machine that has it and run that:\n"
+            "    python MailboxReport.py --build\n"
+        )
+        return 1
+
     root = tk.Tk()
     style = ttk.Style(root)
 
@@ -661,7 +733,8 @@ def main():
 
     MailboxReportApp(root)
     root.mainloop()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
